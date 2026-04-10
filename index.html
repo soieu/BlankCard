@@ -3,8 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#5B6ABF">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Blank Card">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <title>Blank Card - 빈칸 학습</title>
   <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -27,6 +35,10 @@
         <button class="btn btn-secondary btn-sm" onclick="app.showStats()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           통계
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="app.showSync()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          동기화
         </button>
         <button class="btn btn-secondary btn-sm" onclick="app.exportAllData()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -228,6 +240,31 @@
         <div class="modal-actions">
           <button class="btn btn-secondary" onclick="app.closeModal('modal-study-options')">취소</button>
           <button class="btn btn-primary" onclick="app.confirmStudyStart()">시작</button>
+        </div>
+      </div>
+    </div>
+    <!-- Sync Modal -->
+    <div id="modal-sync" class="modal hidden">
+      <div class="modal-overlay" onclick="app.closeModal('modal-sync')"></div>
+      <div class="modal-content">
+        <h3>기기 간 동기화</h3>
+        <div class="sync-section">
+          <p class="sync-label">내 동기화 코드</p>
+          <div class="sync-code-display">
+            <span id="my-sync-code">------</span>
+            <button class="btn btn-secondary btn-sm" onclick="app.copySyncCode()">복사</button>
+          </div>
+          <p class="sync-hint">이 코드를 다른 기기에서 입력하면 데이터가 동기화됩니다.</p>
+        </div>
+        <div class="sync-section" style="margin-top:16px; border-top:1px solid var(--border); padding-top:16px;">
+          <p class="sync-label">다른 기기 코드 입력</p>
+          <div class="sync-input-row">
+            <input type="text" id="sync-code-input" placeholder="동기화 코드 입력" maxlength="8" style="text-transform:uppercase; letter-spacing:2px; text-align:center;">
+          </div>
+          <button class="btn btn-primary btn-full" onclick="app.applySyncCode()" style="margin-top:8px;">이 코드로 동기화</button>
+        </div>
+        <div class="modal-actions" style="margin-top:16px;">
+          <button class="btn btn-secondary" onclick="app.closeModal('modal-sync')">닫기</button>
         </div>
       </div>
     </div>

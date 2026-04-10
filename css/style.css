@@ -1111,6 +1111,53 @@ textarea:focus, input[type="text"]:focus {
   to { opacity: 0; }
 }
 
+/* Sync Modal */
+.sync-section {
+  margin-bottom: 4px;
+}
+
+.sync-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.sync-code-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg);
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+}
+
+.sync-code-display span {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--primary);
+  flex: 1;
+  text-align: center;
+}
+
+.sync-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.sync-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.sync-input-row input {
+  font-size: 18px;
+  font-weight: 700;
+}
+
 /* Animations */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }

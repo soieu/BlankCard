@@ -6,27 +6,85 @@ const BLANK_RE = /\{\{(.+?)\}\}/g;
 const LEITNER_INTERVALS = [0, 0, 1, 3, 7, 14];
 
 // ============================================================
-// Data Layer (File-based via server API)
+// Supabase Setup
 // ============================================================
+const SUPABASE_URL = 'https://gbjmfovpttrhakzkusbg.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdiam1mb3ZwdHRyaGFremt1c2JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NzE4ODIsImV4cCI6MjA5MTM0Nzg4Mn0.rU0Z4FF8UnoYBv-ixbmlb833d3neo1JN2md2VpDO9HU';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ============================================================
+// Sync Code Management
+// ============================================================
+function generateSyncCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+function getSyncCode() {
+  let code = localStorage.getItem('blankcard_sync_code');
+  if (!code) {
+    code = generateSyncCode();
+    localStorage.setItem('blankcard_sync_code', code);
+  }
+  return code;
+}
+
+// ============================================================
+// Data Layer (Supabase)
+// ============================================================
+const DEFAULT_DATA = { decks: [], stats: { dailyLog: {}, currentStreak: 0, longestStreak: 0, lastStudyDate: null } };
+
 async function loadData() {
+  const syncCode = getSyncCode();
   try {
-    const res = await fetch('/api/data');
-    const data = await res.json();
-    if (!data.stats) {
-      data.stats = { dailyLog: {}, currentStreak: 0, longestStreak: 0, lastStudyDate: null };
+    const { data, error } = await supabase
+      .from('blankcard_data')
+      .select('data')
+      .eq('sync_code', syncCode)
+      .single();
+
+    if (error && error.code === 'PGRST116') {
+      // No row found — create one
+      const newData = { ...DEFAULT_DATA };
+      await supabase.from('blankcard_data').insert({ sync_code: syncCode, data: newData });
+      return newData;
     }
-    return data;
-  } catch {
-    return { decks: [], stats: { dailyLog: {}, currentStreak: 0, longestStreak: 0, lastStudyDate: null } };
+    if (error) throw error;
+
+    const result = data.data;
+    if (!result.stats) {
+      result.stats = { ...DEFAULT_DATA.stats };
+    }
+    return result;
+  } catch (e) {
+    console.error('Load error:', e);
+    // Fallback to localStorage
+    const local = localStorage.getItem('blankcard_local');
+    if (local) return JSON.parse(local);
+    return { ...DEFAULT_DATA };
   }
 }
 
+let _saveTimeout = null;
 async function saveData(data) {
-  await fetch('/api/data', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data, null, 2)
-  });
+  // Always save to localStorage as backup
+  localStorage.setItem('blankcard_local', JSON.stringify(data));
+
+  // Debounce Supabase saves
+  clearTimeout(_saveTimeout);
+  _saveTimeout = setTimeout(async () => {
+    const syncCode = getSyncCode();
+    try {
+      await supabase
+        .from('blankcard_data')
+        .update({ data: data, updated_at: new Date().toISOString() })
+        .eq('sync_code', syncCode);
+    } catch (e) {
+      console.error('Save error:', e);
+    }
+  }, 500);
 }
 
 function generateId() {
@@ -139,6 +197,66 @@ const app = {
     el.textContent = msg;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 2000);
+  },
+
+  // =========================================================
+  // Sync
+  // =========================================================
+  showSync() {
+    document.getElementById('my-sync-code').textContent = getSyncCode();
+    document.getElementById('sync-code-input').value = '';
+    document.getElementById('modal-sync').classList.remove('hidden');
+  },
+
+  copySyncCode() {
+    const code = getSyncCode();
+    navigator.clipboard.writeText(code).then(() => {
+      this.toast('동기화 코드가 복사되었습니다');
+    }).catch(() => {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = code;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      this.toast('동기화 코드가 복사되었습니다');
+    });
+  },
+
+  async applySyncCode() {
+    const input = document.getElementById('sync-code-input');
+    const code = input.value.trim().toUpperCase();
+    if (!code || code.length < 4) {
+      this.toast('올바른 동기화 코드를 입력해주세요');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('blankcard_data')
+        .select('data')
+        .eq('sync_code', code)
+        .single();
+
+      if (error || !data) {
+        this.toast('해당 코드의 데이터를 찾을 수 없습니다');
+        return;
+      }
+
+      localStorage.setItem('blankcard_sync_code', code);
+      this.data = data.data;
+      if (!this.data.stats) {
+        this.data.stats = { dailyLog: {}, currentStreak: 0, longestStreak: 0, lastStudyDate: null };
+      }
+      localStorage.setItem('blankcard_local', JSON.stringify(this.data));
+      this.renderDecks();
+      this.closeModal('modal-sync');
+      this.toast('동기화 완료!');
+    } catch (e) {
+      this.toast('동기화 중 오류가 발생했습니다');
+      console.error(e);
+    }
   },
 
   // =========================================================
@@ -501,7 +619,6 @@ const app = {
           BLANK_RE.lastIndex = 0;
           this._importBuffer.push({ type: 'blank', text: trimmed });
         } else {
-          // Try tab, comma, or semicolon as delimiter
           let parts = null;
           for (const sep of ['\t', ',', ';']) {
             const split = trimmed.split(sep);
@@ -716,13 +833,11 @@ const app = {
     const total = this.studyQueue.length;
     const current = this.studyIndex + 1;
 
-    // Progress
     document.getElementById('study-progress').innerHTML = `
       <span>${current} / ${total}</span>
       <div class="progress-bar"><div class="progress-fill" style="width: ${(current / total) * 100}%"></div></div>
     `;
 
-    // Undo button state
     const undoBtn = document.getElementById('btn-undo');
     if (undoBtn) undoBtn.style.opacity = this.studyHistory.length > 0 ? '1' : '0.3';
 
@@ -734,11 +849,9 @@ const app = {
     this.revealed = false;
     controls.classList.add('hidden');
 
-    // Star button
     this.updateStudyStarBtn();
 
     if (this.typingMode) {
-      // Typing mode
       hint.textContent = '정답을 입력하고 Enter';
       hint.style.opacity = '1';
       studyCard.onclick = null;
@@ -767,7 +880,6 @@ const app = {
         if (input) setTimeout(() => input.focus(), 100);
       }
     } else {
-      // Normal reveal mode
       hint.textContent = '탭하여 정답 확인';
       hint.style.opacity = '1';
       studyCard.onclick = () => app.revealBlanks();
@@ -811,7 +923,6 @@ const app = {
       }
     });
 
-    // Remove check button
     const checkBtn = content.querySelector('.btn-check-answer');
     if (checkBtn) checkBtn.remove();
 
@@ -847,7 +958,6 @@ const app = {
     const realCard = deck.cards.find(c => c.id === card.id);
 
     if (realCard) {
-      // Save undo snapshot
       this.studyHistory.push({
         cardId: realCard.id,
         previousBox: realCard.box,
@@ -929,7 +1039,6 @@ const app = {
     stats.dailyLog[today].correct += this.studyCorrect;
     stats.dailyLog[today].wrong += this.studyWrong;
 
-    // Calculate streak
     stats.lastStudyDate = today;
     stats.currentStreak = this.calculateStreak();
     if (stats.currentStreak > (stats.longestStreak || 0)) {
@@ -968,7 +1077,6 @@ const app = {
     const log = stats.dailyLog || {};
     const streak = this.calculateStreak();
 
-    // Total studied & accuracy
     let totalStudied = 0, totalCorrect = 0;
     for (const day of Object.values(log)) {
       totalStudied += day.studied;
@@ -990,7 +1098,6 @@ const app = {
       <div class="stat-card"><div class="stat-value">${stats.longestStreak || 0}</div><div class="stat-label">최장 연속</div></div>
     `;
 
-    // Calendar (last 35 days, fill to start on Mon)
     const today = new Date();
     const days = [];
     for (let i = 34; i >= 0; i--) {
@@ -1006,7 +1113,6 @@ const app = {
     }
     document.getElementById('stats-calendar').innerHTML = days.join('');
 
-    // Daily log (last 10 days with data)
     const logEntries = Object.entries(log)
       .filter(([, v]) => v.studied > 0)
       .sort((a, b) => b[0].localeCompare(a[0]))
@@ -1082,12 +1188,16 @@ const app = {
         }
       }
 
-      // Undo: Ctrl+Z
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
         this.undoLastAnswer();
       }
     });
+
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
   }
 };
 
