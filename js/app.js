@@ -10,7 +10,16 @@ const LEITNER_INTERVALS = [0, 0, 1, 3, 7, 14];
 // ============================================================
 const SUPABASE_URL = 'https://gbjmfovpttrhakzkusbg.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdiam1mb3ZwdHRyaGFremt1c2JnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NzE4ODIsImV4cCI6MjA5MTM0Nzg4Mn0.rU0Z4FF8UnoYBv-ixbmlb833d3neo1JN2md2VpDO9HU';
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let db = null;
+try {
+  const _sb = window.supabase;
+  if (_sb && _sb.createClient) {
+    db = _sb.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+} catch (e) {
+  console.warn('Supabase init failed, using localStorage only:', e);
+}
 
 // ============================================================
 // Sync Code Management
@@ -38,17 +47,23 @@ const DEFAULT_DATA = { decks: [], stats: { dailyLog: {}, currentStreak: 0, longe
 
 async function loadData() {
   const syncCode = getSyncCode();
+
+  if (!db) {
+    const local = localStorage.getItem('blankcard_local');
+    if (local) return JSON.parse(local);
+    return { ...DEFAULT_DATA };
+  }
+
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('blankcard_data')
       .select('data')
       .eq('sync_code', syncCode)
       .single();
 
     if (error && error.code === 'PGRST116') {
-      // No row found — create one
       const newData = { ...DEFAULT_DATA };
-      await supabase.from('blankcard_data').insert({ sync_code: syncCode, data: newData });
+      await db.from('blankcard_data').insert({ sync_code: syncCode, data: newData });
       return newData;
     }
     if (error) throw error;
@@ -57,10 +72,10 @@ async function loadData() {
     if (!result.stats) {
       result.stats = { ...DEFAULT_DATA.stats };
     }
+    localStorage.setItem('blankcard_local', JSON.stringify(result));
     return result;
   } catch (e) {
     console.error('Load error:', e);
-    // Fallback to localStorage
     const local = localStorage.getItem('blankcard_local');
     if (local) return JSON.parse(local);
     return { ...DEFAULT_DATA };
@@ -69,15 +84,15 @@ async function loadData() {
 
 let _saveTimeout = null;
 async function saveData(data) {
-  // Always save to localStorage as backup
   localStorage.setItem('blankcard_local', JSON.stringify(data));
 
-  // Debounce Supabase saves
+  if (!db) return;
+
   clearTimeout(_saveTimeout);
   _saveTimeout = setTimeout(async () => {
     const syncCode = getSyncCode();
     try {
-      await supabase
+      await db
         .from('blankcard_data')
         .update({ data: data, updated_at: new Date().toISOString() })
         .eq('sync_code', syncCode);
@@ -232,8 +247,13 @@ const app = {
       return;
     }
 
+    if (!db) {
+      this.toast('클라우드 연결이 필요합니다. 새로고침 후 다시 시도해주세요.');
+      return;
+    }
+
     try {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('blankcard_data')
         .select('data')
         .eq('sync_code', code)
