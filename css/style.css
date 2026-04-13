@@ -1111,6 +1111,15 @@ textarea:focus, input[type="text"]:focus {
   to { opacity: 0; }
 }
 
+/* Admin */
+#btn-admin {
+  position: relative;
+}
+
+#icon-unlock {
+  color: var(--success);
+}
+
 /* Sync Modal */
 .sync-section {
   margin-bottom: 4px;

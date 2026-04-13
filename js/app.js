@@ -120,6 +120,7 @@ function todayStr() {
 // ============================================================
 const app = {
   data: { decks: [], stats: { dailyLog: {}, currentStreak: 0, longestStreak: 0, lastStudyDate: null } },
+  isAdmin: false,
   currentDeckId: null,
   currentView: 'home',
   viewHistory: [],
@@ -160,20 +161,24 @@ const app = {
       backBtn.classList.remove('hidden');
       const deck = this.getDeck();
       title.textContent = deck ? deck.name : '';
-      actions.innerHTML = `
-        <button class="header-btn" onclick="app.exportDeck()" title="내보내기">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        </button>`;
+      if (this.isAdmin) {
+        actions.innerHTML = `
+          <button class="header-btn" onclick="app.exportDeck()" title="내보내기">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>`;
+      }
     } else if (view === 'add') {
       backBtn.classList.remove('hidden');
       title.textContent = '카드 추가';
     } else if (view === 'study') {
       backBtn.classList.remove('hidden');
       title.textContent = '학습';
-      actions.innerHTML = `
-        <button class="header-btn" id="btn-undo" onclick="app.undoLastAnswer()" title="되돌리기" style="opacity:0.3">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-        </button>`;
+      if (this.isAdmin) {
+        actions.innerHTML = `
+          <button class="header-btn" id="btn-undo" onclick="app.undoLastAnswer()" title="되돌리기" style="opacity:0.3">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          </button>`;
+      }
     } else if (view === 'complete') {
       backBtn.classList.remove('hidden');
       title.textContent = '결과';
@@ -212,6 +217,126 @@ const app = {
     el.textContent = msg;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 2000);
+  },
+
+  // =========================================================
+  // Admin
+  // =========================================================
+  updateAdminUI() {
+    document.getElementById('icon-lock').classList.toggle('hidden', this.isAdmin);
+    document.getElementById('icon-unlock').classList.toggle('hidden', !this.isAdmin);
+    document.querySelectorAll('.admin-only').forEach(el => {
+      el.style.display = this.isAdmin ? '' : 'none';
+    });
+    document.querySelectorAll('.guest-only').forEach(el => {
+      el.style.display = this.isAdmin ? 'none' : '';
+    });
+  },
+
+  showAdminLogin() {
+    if (this.isAdmin) {
+      this.isAdmin = false;
+      localStorage.removeItem('blankcard_admin');
+      this.updateAdminUI();
+      this.renderDecks();
+      this.toast('관리자 모드가 해제되었습니다');
+      return;
+    }
+    const hasPin = this.data.adminPin;
+    const titleEl = document.getElementById('admin-modal-title');
+    const descEl = document.getElementById('admin-modal-desc');
+    const confirmEl = document.getElementById('admin-pw-confirm');
+    document.getElementById('admin-pw-input').value = '';
+    confirmEl.value = '';
+
+    if (hasPin) {
+      titleEl.textContent = '관리자 로그인';
+      descEl.textContent = '비밀번호를 입력하세요.';
+      confirmEl.classList.add('hidden');
+    } else {
+      titleEl.textContent = '관리자 비밀번호 설정';
+      descEl.textContent = '처음 사용 시 비밀번호를 설정합니다.';
+      confirmEl.classList.remove('hidden');
+    }
+    document.getElementById('modal-admin').classList.remove('hidden');
+    document.getElementById('admin-pw-input').focus();
+  },
+
+  async submitAdminLogin() {
+    const pw = document.getElementById('admin-pw-input').value;
+    if (!pw) { this.toast('비밀번호를 입력해주세요'); return; }
+
+    if (!this.data.adminPin) {
+      // First time setup
+      const confirm = document.getElementById('admin-pw-confirm').value;
+      if (pw !== confirm) { this.toast('비밀번호가 일치하지 않습니다'); return; }
+      this.data.adminPin = await this.hashPin(pw);
+      this.save();
+      this.isAdmin = true;
+      localStorage.setItem('blankcard_admin', '1');
+      this.closeModal('modal-admin');
+      this.updateAdminUI();
+      this.renderDecks();
+      this.toast('관리자 비밀번호가 설정되었습니다');
+    } else {
+      // Login
+      const hash = await this.hashPin(pw);
+      if (hash === this.data.adminPin) {
+        this.isAdmin = true;
+        localStorage.setItem('blankcard_admin', '1');
+        this.closeModal('modal-admin');
+        this.updateAdminUI();
+        this.renderDecks();
+        this.toast('관리자 모드 활성화');
+      } else {
+        this.toast('비밀번호가 틀렸습니다');
+      }
+    }
+  },
+
+  async hashPin(pin) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(pin + 'blankcard_salt');
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  },
+
+  // =========================================================
+  // Study entry (admin vs guest)
+  // =========================================================
+  startStudy() {
+    if (this.isAdmin) {
+      this.showStudyOptions();
+    } else {
+      // Guest: start simple study with all cards
+      const deck = this.getDeck();
+      if (!deck || deck.cards.length === 0) return;
+      this.studyQueue = [...deck.cards].sort(() => Math.random() - 0.5);
+      this.studyIndex = 0;
+      this.studyCorrect = 0;
+      this.studyWrong = 0;
+      this.revealed = false;
+      this.typingMode = false;
+      this.studyHistory = [];
+      this.navigate('study');
+      this.renderStudyCard();
+    }
+  },
+
+  nextCard() {
+    // Guest simple next (no Leitner tracking)
+    this.studyIndex++;
+    if (this.studyIndex >= this.studyQueue.length) {
+      this.navigate('complete', true);
+      document.getElementById('study-result').innerHTML = `
+        <div style="text-align:center;font-size:16px;color:var(--text-secondary);padding:12px;">
+          ${this.studyQueue.length}장의 카드를 학습했습니다
+        </div>`;
+      document.getElementById('study-controls').classList.add('hidden');
+      return;
+    }
+    this.revealed = false;
+    this.renderStudyCard();
   },
 
   // =========================================================
@@ -331,7 +456,7 @@ const app = {
             <div class="deck-meta"><span>${total}장</span></div>
           </div>
           <span class="${badgeClass}">${due}</span>
-          <div class="deck-actions-menu" onclick="event.stopPropagation()">
+          ${this.isAdmin ? `<div class="deck-actions-menu" onclick="event.stopPropagation()">
             <button class="deck-menu-btn" onclick="app.toggleDeckMenu('${deck.id}', event)">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/>
@@ -342,7 +467,7 @@ const app = {
               <button onclick="app.resetDeck('${deck.id}')">학습 초기화</button>
               <button class="danger" onclick="app.deleteDeck('${deck.id}')">삭제</button>
             </div>
-          </div>
+          </div>` : ''}
         </div>`;
     }).join('');
   },
@@ -441,20 +566,27 @@ const app = {
     if (!deck) return;
 
     const total = deck.cards.length;
-    const due = getDueCards(deck).length;
-    const mastered = deck.cards.filter(c => c.box >= 5).length;
-    const starred = deck.cards.filter(c => c.starred).length;
+    const deckStatsEl = document.getElementById('deck-stats');
 
-    document.getElementById('deck-stats').innerHTML = `
-      <div class="stat-item"><div class="stat-value">${total}</div><div class="stat-label">전체</div></div>
-      <div class="stat-item"><div class="stat-value">${due}</div><div class="stat-label">대기</div></div>
-      <div class="stat-item"><div class="stat-value">${starred}</div><div class="stat-label">별표</div></div>
-      <div class="stat-item"><div class="stat-value">${mastered}</div><div class="stat-label">마스터</div></div>
-    `;
+    if (this.isAdmin) {
+      const due = getDueCards(deck).length;
+      const mastered = deck.cards.filter(c => c.box >= 5).length;
+      const starred = deck.cards.filter(c => c.starred).length;
+      deckStatsEl.innerHTML = `
+        <div class="stat-item"><div class="stat-value">${total}</div><div class="stat-label">전체</div></div>
+        <div class="stat-item"><div class="stat-value">${due}</div><div class="stat-label">대기</div></div>
+        <div class="stat-item"><div class="stat-value">${starred}</div><div class="stat-label">별표</div></div>
+        <div class="stat-item"><div class="stat-value">${mastered}</div><div class="stat-label">마스터</div></div>
+      `;
+    } else {
+      deckStatsEl.innerHTML = `
+        <div class="stat-item" style="grid-column:1/-1"><div class="stat-value">${total}</div><div class="stat-label">전체 카드</div></div>
+      `;
+    }
 
     const btnStudy = document.getElementById('btn-study');
     if (total === 0) {
-      btnStudy.textContent = '카드를 먼저 추가하세요';
+      btnStudy.textContent = this.isAdmin ? '카드를 먼저 추가하세요' : '카드가 없습니다';
       btnStudy.disabled = true;
     } else {
       btnStudy.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> 학습 시작`;
@@ -464,32 +596,56 @@ const app = {
     const container = document.getElementById('card-list-container');
     const emptyCards = document.getElementById('empty-cards');
 
-    if (total === 0) {
-      container.innerHTML = '';
-      emptyCards.classList.remove('hidden');
-    } else {
-      emptyCards.classList.add('hidden');
-      container.innerHTML = deck.cards.map(card => {
-        const displayText = card.type === 'blank'
-          ? card.text.replace(BLANK_RE, '<span class="blank-word">$1</span>')
-          : `<strong>${this.escapeHtml(card.front)}</strong> → ${this.escapeHtml(card.back)}`;
-        const boxLabel = `Box ${card.box || 1}`;
-        const starClass = card.starred ? 'star-btn starred' : 'star-btn';
-        const starFill = card.starred ? 'fill="#FFC107"' : 'fill="none"';
-        return `
-          <div class="card-item">
-            <div class="card-item-content" onclick="app.editCard('${card.id}')">
-              <div class="card-text">${displayText}</div>
-              <div class="card-bottom">
-                <span class="card-box-indicator">${boxLabel}</span>
+    if (this.isAdmin) {
+      // Admin sees full card list with edit/star
+      if (total === 0) {
+        container.innerHTML = '';
+        emptyCards.classList.remove('hidden');
+      } else {
+        emptyCards.classList.add('hidden');
+        container.innerHTML = deck.cards.map(card => {
+          const displayText = card.type === 'blank'
+            ? card.text.replace(BLANK_RE, '<span class="blank-word">$1</span>')
+            : `<strong>${this.escapeHtml(card.front)}</strong> → ${this.escapeHtml(card.back)}`;
+          const boxLabel = `Box ${card.box || 1}`;
+          const starClass = card.starred ? 'star-btn starred' : 'star-btn';
+          const starFill = card.starred ? 'fill="#FFC107"' : 'fill="none"';
+          return `
+            <div class="card-item">
+              <div class="card-item-content" onclick="app.editCard('${card.id}')">
+                <div class="card-text">${displayText}</div>
+                <div class="card-bottom">
+                  <span class="card-box-indicator">${boxLabel}</span>
+                </div>
               </div>
-            </div>
-            <button class="${starClass}" onclick="app.toggleStar('${card.id}', event)">
-              <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" ${starFill}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-            </button>
+              <button class="${starClass}" onclick="app.toggleStar('${card.id}', event)">
+                <svg width="18" height="18" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" ${starFill}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              </button>
           </div>`;
-      }).join('');
+        }).join('');
+      }
+    } else {
+      // Guest: simple card list (no edit, no star, no box)
+      if (total === 0) {
+        container.innerHTML = '';
+        emptyCards.classList.remove('hidden');
+      } else {
+        emptyCards.classList.add('hidden');
+        container.innerHTML = deck.cards.map(card => {
+          const displayText = card.type === 'blank'
+            ? card.text.replace(BLANK_RE, '<span class="blank-word">$1</span>')
+            : `<strong>${this.escapeHtml(card.front)}</strong> → ${this.escapeHtml(card.back)}`;
+          return `
+            <div class="card-item">
+              <div class="card-item-content">
+                <div class="card-text">${displayText}</div>
+              </div>
+            </div>`;
+        }).join('');
+      }
     }
+
+    this.updateAdminUI();
   },
 
   // =========================================================
@@ -1170,15 +1326,27 @@ const app = {
   async init() {
     this.loadTheme();
     this.data = await loadData();
+
+    // Restore admin session
+    if (localStorage.getItem('blankcard_admin') === '1' && this.data.adminPin) {
+      this.isAdmin = true;
+    }
+    this.updateAdminUI();
     this.renderDecks();
 
     // Live preview
     document.getElementById('blank-input').addEventListener('input', () => this.updateBlankPreview());
     document.getElementById('edit-card-text').addEventListener('input', () => this.updateEditPreview());
 
-    // Enter for deck name
+    // Enter for deck name / admin password
     document.getElementById('deck-name-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') this.createDeck();
+    });
+    document.getElementById('admin-pw-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this.submitAdminLogin();
+    });
+    document.getElementById('admin-pw-confirm').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this.submitAdminLogin();
     });
 
     // Close menus
@@ -1190,7 +1358,7 @@ const app = {
     document.addEventListener('keydown', (e) => {
       if (this.currentView !== 'study') return;
 
-      if (this.typingMode) {
+      if (this.isAdmin && this.typingMode) {
         if (e.key === 'Enter' && !this.revealed) {
           e.preventDefault();
           this.checkTypingAnswer();
@@ -1198,7 +1366,7 @@ const app = {
           if (e.code === 'ArrowLeft' || e.key === '1') this.answerCard(false);
           else if (e.code === 'ArrowRight' || e.key === '2') this.answerCard(true);
         }
-      } else {
+      } else if (this.isAdmin) {
         if (e.code === 'Space' && !this.revealed) {
           e.preventDefault();
           this.revealBlanks();
@@ -1206,9 +1374,20 @@ const app = {
           if (e.code === 'ArrowLeft' || e.key === '1') this.answerCard(false);
           else if (e.code === 'ArrowRight' || e.key === '2') this.answerCard(true);
         }
+      } else {
+        // Guest: space to reveal, right arrow or space again to next
+        if (e.code === 'Space' && !this.revealed) {
+          e.preventDefault();
+          this.revealBlanks();
+        } else if (e.code === 'Space' && this.revealed) {
+          e.preventDefault();
+          this.nextCard();
+        } else if (e.code === 'ArrowRight' && this.revealed) {
+          this.nextCard();
+        }
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      if (this.isAdmin && (e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
         this.undoLastAnswer();
       }

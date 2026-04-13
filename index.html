@@ -23,6 +23,10 @@
       </button>
       <h1 id="header-title">Blank Card</h1>
       <div id="header-actions"></div>
+      <button id="btn-admin" class="header-btn" onclick="app.showAdminLogin()">
+        <svg id="icon-lock" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <svg id="icon-unlock" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+      </button>
       <button id="btn-darkmode" class="header-btn" onclick="app.toggleDarkMode()">
         <svg id="icon-moon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>
         <svg id="icon-sun" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -31,7 +35,7 @@
 
     <!-- Home: Deck List -->
     <section id="view-home" class="view active">
-      <div class="home-top-bar">
+      <div class="home-top-bar admin-only">
         <button class="btn btn-secondary btn-sm" onclick="app.showStats()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           통계
@@ -48,10 +52,11 @@
       <div class="empty-state" id="empty-decks">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h4"/></svg>
         <p>덱이 없습니다</p>
-        <p class="sub">아래 + 버튼으로 새 덱을 만들어보세요</p>
+        <p class="sub admin-only">아래 + 버튼으로 새 덱을 만들어보세요</p>
+        <p class="sub guest-only">관리자가 덱을 추가하면 여기에 표시됩니다</p>
       </div>
       <div id="deck-list" class="card-list"></div>
-      <button class="fab" onclick="app.showCreateDeck()">+</button>
+      <button class="fab admin-only" onclick="app.showCreateDeck()">+</button>
     </section>
 
     <!-- Stats View -->
@@ -68,11 +73,11 @@
     <section id="view-deck" class="view">
       <div class="deck-stats" id="deck-stats"></div>
       <div class="deck-actions">
-        <button class="btn btn-primary btn-study" id="btn-study" onclick="app.showStudyOptions()">
+        <button class="btn btn-primary btn-study" id="btn-study" onclick="app.startStudy()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
           학습 시작
         </button>
-        <button class="btn btn-secondary" onclick="app.showAddCards()">
+        <button class="btn btn-secondary admin-only" id="btn-add-cards" onclick="app.showAddCards()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           카드 추가
         </button>
@@ -145,7 +150,7 @@
       <div class="study-progress" id="study-progress"></div>
       <div class="study-card-container">
         <div class="study-card" id="study-card">
-          <button class="star-btn-study" id="study-star-btn" onclick="app.toggleStudyStar(event)">
+          <button class="star-btn-study admin-only" id="study-star-btn" onclick="app.toggleStudyStar(event)">
             <svg width="24" height="24" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </button>
           <div class="study-card-content" id="study-card-content"></div>
@@ -153,13 +158,17 @@
         </div>
       </div>
       <div class="study-controls hidden" id="study-controls">
-        <button class="btn btn-wrong" onclick="app.answerCard(false)">
+        <button class="btn btn-wrong admin-only" onclick="app.answerCard(false)">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           모르겠어요
         </button>
-        <button class="btn btn-correct" onclick="app.answerCard(true)">
+        <button class="btn btn-correct admin-only" onclick="app.answerCard(true)">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
           알고 있어요
+        </button>
+        <button class="btn btn-primary guest-only" style="flex:1;padding:14px;font-size:16px;" onclick="app.nextCard()">
+          다음 카드
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
         </button>
       </div>
     </section>
@@ -243,6 +252,21 @@
         </div>
       </div>
     </div>
+    <!-- Admin Login Modal -->
+    <div id="modal-admin" class="modal hidden">
+      <div class="modal-overlay" onclick="app.closeModal('modal-admin')"></div>
+      <div class="modal-content">
+        <h3 id="admin-modal-title">관리자 로그인</h3>
+        <p id="admin-modal-desc" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">비밀번호를 입력하세요.</p>
+        <input type="password" id="admin-pw-input" placeholder="비밀번호" maxlength="30">
+        <input type="password" id="admin-pw-confirm" placeholder="비밀번호 확인" maxlength="30" class="hidden" style="margin-top:8px;">
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="app.closeModal('modal-admin')">취소</button>
+          <button class="btn btn-primary" onclick="app.submitAdminLogin()">확인</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Sync Modal -->
     <div id="modal-sync" class="modal hidden">
       <div class="modal-overlay" onclick="app.closeModal('modal-sync')"></div>
