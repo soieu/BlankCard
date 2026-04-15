@@ -1157,6 +1157,19 @@ textarea:focus, input[type="text"]:focus {
   line-height: 1.5;
 }
 
+.sync-url-display {
+  background: var(--bg);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  word-break: break-all;
+}
+
+.sync-url-text {
+  font-size: 12px;
+  color: var(--primary);
+  font-family: monospace;
+}
+
 .sync-input-row {
   display: flex;
   gap: 8px;

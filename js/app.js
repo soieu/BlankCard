@@ -32,6 +32,18 @@ function generateSyncCode() {
 }
 
 function getSyncCode() {
+  // 1) URL 파라미터에서 코드 확인 (?code=XXXXXX)
+  const params = new URLSearchParams(window.location.search);
+  const urlCode = params.get('code');
+  if (urlCode) {
+    const upper = urlCode.trim().toUpperCase();
+    localStorage.setItem('blankcard_sync_code', upper);
+    // URL 깔끔하게 정리 (파라미터 제거)
+    window.history.replaceState({}, '', window.location.pathname);
+    return upper;
+  }
+
+  // 2) localStorage에서 확인
   let code = localStorage.getItem('blankcard_sync_code');
   if (!code) {
     code = generateSyncCode();
@@ -343,24 +355,27 @@ const app = {
   // Sync
   // =========================================================
   showSync() {
-    document.getElementById('my-sync-code').textContent = getSyncCode();
+    const code = getSyncCode();
+    document.getElementById('my-sync-code').textContent = code;
+    const shareUrl = `${window.location.origin}?code=${code}`;
+    document.getElementById('sync-share-url').textContent = shareUrl;
     document.getElementById('sync-code-input').value = '';
     document.getElementById('modal-sync').classList.remove('hidden');
   },
 
   copySyncCode() {
     const code = getSyncCode();
-    navigator.clipboard.writeText(code).then(() => {
-      this.toast('동기화 코드가 복사되었습니다');
+    const shareUrl = `${window.location.origin}?code=${code}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      this.toast('공유 링크가 복사되었습니다');
     }).catch(() => {
-      // Fallback
       const ta = document.createElement('textarea');
-      ta.value = code;
+      ta.value = shareUrl;
       document.body.appendChild(ta);
       ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-      this.toast('동기화 코드가 복사되었습니다');
+      this.toast('공유 링크가 복사되었습니다');
     });
   },
 
